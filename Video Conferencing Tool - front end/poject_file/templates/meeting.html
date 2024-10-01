@@ -1,0 +1,167 @@
+<html>
+
+<head>
+    <style>
+        #root {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #status-light {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: red;
+            border: 2px solid black;
+        }
+
+        #audio-light {
+            position: absolute;
+            top: 40px;
+            right: 20px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background-color: red;
+            border: 2px solid black;
+        }
+
+        video {
+            display: none; /* Hide the video stream element */
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+    <div id="status-light"></div>
+    <div id="audio-light"></div>
+    <video id="webcam" autoplay playsinline></video>
+</body>
+
+<!-- Include TensorFlow.js and the BlazeFace model -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+<script src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"></script>
+
+<script>
+    window.onload = async function () {
+        function getUrlParams(url) {
+            let urlStr = url.split('?')[1];
+            const urlSearchParams = new URLSearchParams(urlStr);
+            const result = Object.fromEntries(urlSearchParams.entries());
+            return result;
+        }
+
+        const roomID = getUrlParams(window.location.href)['roomID'] || (Math.floor(Math.random() * 10000) + "");
+        const userID = Math.floor(Math.random() * 10000) + "";
+        const userName = "userName" + userID;
+        const appID = 2123037421;
+        const serverSecret = "946f47b44377c376e0971e1c95512cd1";
+        const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(appID, serverSecret, roomID, userID, userName);
+
+        const zp = ZegoUIKitPrebuilt.create(kitToken);
+
+        zp.joinRoom({
+            container: document.querySelector("#root"),
+            sharedLinks: [{
+                name: 'Personal link',
+                url: window.location.protocol + '//' + window.location.host + window.location.pathname + '?roomID=' + roomID,
+            }],
+            scenario: {
+                mode: ZegoUIKitPrebuilt.VideoConference,
+            },
+            turnOnMicrophoneWhenJoining: true,
+            turnOnCameraWhenJoining: true,
+            showMyCameraToggleButton: true,
+            showMyMicrophoneToggleButton: true,
+            showAudioVideoSettingsButton: true,
+            showScreenSharingButton: true,
+            showTextChat: true,
+            showUserList: true,
+            maxUsers: 2,
+            layout: "Auto",
+            showLayoutButton: false,
+        });
+
+        // Set up BlazeFace model for face detection
+        const video = document.getElementById('webcam');
+        const model = await blazeface.load(); // Load the BlazeFace model
+
+        // Access the webcam stream
+        async function setupWebcam() {
+            return new Promise((resolve, reject) => {
+                navigator.mediaDevices.getUserMedia({
+                    video: true
+                }).then((stream) => {
+                    video.srcObject = stream;
+                    video.onloadedmetadata = () => {
+                        resolve(video);
+                    };
+                }).catch(reject);
+            });
+        }
+
+        await setupWebcam(); // Initialize webcam
+
+        // Detect faces using the BlazeFace model
+        async function detectFace() {
+            const predictions = await model.estimateFaces(video, false);
+
+            if (predictions.length > 0) {
+                // Face detected, change light to green
+                document.getElementById('status-light').style.backgroundColor = 'green';
+            } else {
+                // No face detected, change light to red
+                document.getElementById('status-light').style.backgroundColor = 'red';
+            }
+        }
+
+        // Run face detection continuously
+        setInterval(detectFace, 1000); // Check for face detection every second
+
+        // Audio detection
+        const audioLight = document.getElementById('audio-light');
+        async function setupAudioDetection() {
+            const audioContext = new AudioContext();
+            const analyser = audioContext.createAnalyser();
+            const microphone = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const source = audioContext.createMediaStreamSource(microphone);
+            const scriptProcessor = audioContext.createScriptProcessor(2048, 1, 1);
+
+            analyser.smoothingTimeConstant = 0.8;
+            analyser.fftSize = 2048;
+
+            source.connect(analyser);
+            analyser.connect(scriptProcessor);
+            scriptProcessor.connect(audioContext.destination);
+
+            let lastAudioDetected = Date.now();
+
+            scriptProcessor.onaudioprocess = function () {
+                const array = new Uint8Array(analyser.frequencyBinCount);
+                analyser.getByteFrequencyData(array);
+                const average = array.reduce((a, b) => a + b) / array.length;
+
+                // Check if audio level is above threshold
+                if (average > 50) {
+                    // Audio is detected, assume it's live audio
+                    lastAudioDetected = Date.now();
+                    audioLight.style.backgroundColor = 'green'; // Live audio detected
+                } else if (Date.now() - lastAudioDetected > 3000) {
+                    // No live audio detected for 3 seconds
+                    audioLight.style.backgroundColor = 'red'; // No live audio
+                }
+            };
+        }
+
+        // Initialize audio detection
+        setupAudioDetection();
+    };
+</script>
+
+</html>

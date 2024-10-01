@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+
+
+    <h1><b><span style="font-family: 'Arial', sans-serif; font-size: 48px; color: #007bff;">TRUCON</span></b></h1>
+    <h1><b>Welcome</b> {{ first_name }} {{ last_name }}</h1>
+    <hr>
+<!-- "Create or Join Meeting" button -->
+    <div class="create-meeting-button">
+        <div class="button-container">
+            <a class="btn btn-primary" href="{{ url_for('meeting') }}">Create Meeting</a>
+            <a class="btn btn-primary" href="{{ url_for('join') }}">Join Meeting</a>
+            <a class="btn btn-outline-light" href="{{ url_for('logout') }}">Logout</a>
+        </div>
+
+{% endblock %}
